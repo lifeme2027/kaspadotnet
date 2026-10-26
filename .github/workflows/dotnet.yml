@@ -1,0 +1,16 @@
+name: dotnet
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+      - run: dotnet restore kaspadotnet.sln
+      - run: dotnet build kaspadotnet.sln --no-restore -c Release
+      - run: dotnet test kaspadotnet.sln --no-build -c Release --verbosity normal
