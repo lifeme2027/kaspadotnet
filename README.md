@@ -1,10 +1,10 @@
 # kaspadotnet
 
-[![dotnet](https://github.com/composehk/kaspadotnet/actions/workflows/dotnet.yml/badge.svg?branch=main)](https://github.com/composehk/kaspadotnet/actions/workflows/dotnet.yml)
+[![dotnet](https://github.com/lifeme2027/kaspadotnet/actions/workflows/dotnet.yml/badge.svg?branch=main)](https://github.com/lifeme2027/kaspadotnet/actions/workflows/dotnet.yml)
 
 Fork of [svarogg/kaspadotnet](https://github.com/svarogg/kaspadotnet) by [composehk](https://github.com/composehk).
 
-.NET 8 client layer for Kaspa: a small address check, a public REST client that works without a local node, and a legacy protowire gRPC wrapper for kaspad / kaspawalletd. It complements [composehk/kaswallet](https://github.com/composehk/kaswallet) (`dotnet/` C# wallet library and CLI). See [COMPLEMENT.md](COMPLEMENT.md).
+.NET 8 client layer for Kaspa: a small address check, a public REST client that works without a local node, and a legacy protowire gRPC wrapper for kaspad / kaspawalletd. It complements [lifeme2027/kaswallet](https://github.com/lifeme2027/kaswallet) (`dotnet/` C# wallet library and CLI). See [COMPLEMENT.md](COMPLEMENT.md).
 
 ## What works
 

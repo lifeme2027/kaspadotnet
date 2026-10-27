@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Kaspadontnet.Clients</RootNamespace>
-    <Description>Kaspa .NET gRPC/REST client layer. Complements composehk/kaswallet.</Description>
+    <Description>Kaspa .NET gRPC/REST client layer. Complements lifeme2027/kaswallet.</Description>
   </PropertyGroup>
 
   <ItemGroup>

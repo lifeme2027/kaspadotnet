@@ -1,6 +1,6 @@
-# kaspadotnet 与 composehk/kaswallet
+# kaspadotnet 与 lifeme2027/kaswallet
 
-- 主钱包：[composehk/kaswallet](https://github.com/composehk/kaswallet) → `dotnet/`（助记词、密钥、签名、未签名交易草稿、CLI）
+- 主钱包：[lifeme2027/kaswallet](https://github.com/lifeme2027/kaswallet) → `dotnet/`（助记词、密钥、签名、未签名交易草稿、CLI）
 - 本仓：保留原名 **kaspadotnet**，做 .NET 8 客户端层（地址文本、公开 REST、遗留 gRPC）
 - 两边互通的是同一套地址前缀和同一套 REST 余额/UTXO，不是把签名搬进本仓
 
@@ -8,7 +8,7 @@
 
 | Repo | Owns |
 | --- | --- |
-| [composehk/kaswallet](https://github.com/composehk/kaswallet) `dotnet/` | Wallet core: BIP39, keys, signing, canonical address use inside the wallet, REST balance/UTXO, unsigned drafts, CLI. |
+| [lifeme2027/kaswallet](https://github.com/lifeme2027/kaswallet) `dotnet/` | Wallet core: BIP39, keys, signing, canonical address use inside the wallet, REST balance/UTXO, unsigned drafts, CLI. |
 | kaspadotnet | Client layer a wallet can share: `IKaspaAddressValidator`, `KaspaPublicRestClient`, and a legacy kaspad gRPC wrapper. |
 
 Address reuse lives in `Kaspadotnet.Clients/Shared/KaspaAddress.cs`.

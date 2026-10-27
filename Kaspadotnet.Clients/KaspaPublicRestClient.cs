@@ -57,7 +57,7 @@ public sealed class KaspaPublicRestClient : IDisposable
         if (httpClient is null)
         {
             var owned = new HttpClient { BaseAddress = NormalizeBase(baseAddress), Timeout = TimeSpan.FromSeconds(30) };
-            owned.DefaultRequestHeaders.UserAgent.ParseAdd("kaspadotnet (+https://github.com/composehk/kaspadotnet)");
+            owned.DefaultRequestHeaders.UserAgent.ParseAdd("kaspadotnet (+https://github.com/lifeme2027/kaspadotnet)");
             _http = owned;
         }
         else
