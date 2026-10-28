@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Kaspadotnet.Clients.Http;
 using Kaspadotnet.Clients.Shared;
 
 namespace Kaspadotnet.Clients;
@@ -20,7 +21,10 @@ namespace Kaspadotnet.Clients;
 /// <item><c>POST /transactions</c></item>
 /// </list>
 /// The public API rate-limits UTXO routes. One address per call is enough for
-/// wallets; do not scrape from this client. gRPC via <see cref="KaspaRpcClient"/>
+/// wallets; do not scrape from this client. When this class creates its own
+/// <see cref="HttpClient"/>, reads are retried on transient failures (429/5xx,
+/// network errors, per-attempt timeout) via <see cref="KaspaRetryHandler"/>;
+/// <c>POST /transactions</c> is never retried. gRPC via <see cref="KaspaRpcClient"/>
 /// stays available for a local node and is marked legacy/WIP.
 /// </remarks>
 public sealed class KaspaPublicRestClient : IDisposable
@@ -52,11 +56,29 @@ public sealed class KaspaPublicRestClient : IDisposable
     }
 
     public KaspaPublicRestClient(string? baseAddress, HttpClient? httpClient)
+        : this(baseAddress, httpClient, retryOptions: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a client with an explicit retry policy for the HTTP client this class
+    /// owns. Pass <see cref="KaspaRetryOptions.None"/> to disable retries. When
+    /// <paramref name="httpClient"/> is supplied, <paramref name="retryOptions"/> is ignored:
+    /// the caller controls the handler chain (wrap it in <see cref="KaspaRetryHandler"/> to opt in).
+    /// </summary>
+    public KaspaPublicRestClient(string? baseAddress, HttpClient? httpClient, KaspaRetryOptions? retryOptions)
     {
         _ownsClient = httpClient is null;
         if (httpClient is null)
         {
-            var owned = new HttpClient { BaseAddress = NormalizeBase(baseAddress), Timeout = TimeSpan.FromSeconds(30) };
+            var retry = retryOptions ?? KaspaRetryOptions.Default;
+            var handler = new KaspaRetryHandler(new HttpClientHandler(), retry);
+            // The retry handler enforces its own per-attempt timeout, so the overall
+            // HttpClient timeout must not cut a retry sequence short.
+            var overall = retry.PerAttemptTimeout == Timeout.InfiniteTimeSpan
+                ? Timeout.InfiniteTimeSpan
+                : TimeSpan.FromTicks((retry.PerAttemptTimeout.Ticks * (retry.MaxRetries + 1)) + (retry.MaxDelay.Ticks * retry.MaxRetries));
+            var owned = new HttpClient(handler, disposeHandler: true) { BaseAddress = NormalizeBase(baseAddress), Timeout = overall };
             owned.DefaultRequestHeaders.UserAgent.ParseAdd("kaspadotnet (+https://github.com/lifeme2027/kaspadotnet)");
             _http = owned;
         }
@@ -96,7 +118,10 @@ public sealed class KaspaPublicRestClient : IDisposable
 
         var payload = JsonSerializer.Serialize(new AddressListDto { Addresses = normalized }, JsonOptions);
         using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
-        using var response = await _http.PostAsync("addresses/utxos", content, cancellationToken).ConfigureAwait(false);
+        // Read-only lookup that happens to be a POST, so it is safe to retry.
+        using var request = new HttpRequestMessage(HttpMethod.Post, "addresses/utxos") { Content = content };
+        KaspaRetryHandler.MarkIdempotent(request);
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
