@@ -12,7 +12,8 @@ Fork of [svarogg/kaspadotnet](https://github.com/svarogg/kaspadotnet) by [compos
 | --- | --- |
 | `KaspaAddress` / `IKaspaAddressValidator` | Offline. Prefix `kaspa:`, `kaspatest:`, `kaspasim:`, `kaspadev:` plus bech32 charset and CashAddr checksum. |
 | `MassCalculator` / `FeeEstimator` | Offline. 交易质量（compute、transient、KIP-9 storage mass，取归一化后最大值）与手续费估算，version 0 交易，与 kaswallet 对齐。 |
-| `KaspaPublicRestClient` | Use this today. Balance, UTXOs, node info, and blockDAG from `https://api.kaspa.org`. No local node. |
+| `KaspaPublicRestClient` | Use this today. Balance, UTXOs, node info, and blockDAG from `https://api.kaspa.org`. No local node. Reads retry transient failures (see below). |
+| `KaspaRetryHandler` / `KaspaRetryOptions` | Offline. `DelegatingHandler` with exponential backoff and `Retry-After` support for 429/5xx, network errors and per-attempt timeouts. |
 | `KaspaRpcClient` | Legacy / WIP. gRPC `GetBalance`, `GetUtxosByAddresses`, `GetInfo`, `GetBlockDagInfo` against the bundled protowire snapshot. Needs a kaspad gRPC port (`--utxoindex` for balance and UTXOs). |
 | `KaspadClient` / `KaspawalletdClient` | Original low-level channels. Examples for the local wallet daemon still use them. |
 | `Kaspadotnet.Clients.Tests` | Offline. No node and no call to api.kaspa.org. |
@@ -43,6 +44,28 @@ Console.WriteLine($"mass={estimate.Mass.FeeMass} fee={estimate.FeeSompi} sompi")
 ```
 
 测试向量来自 rusty-kaspa 的 `test_storage_mass`、`test_storage_mass_pluralities` 等单元测试（经 kaswallet 复现），另有少量 api.kaspa.org 实测值，见 `MassCalculatorTests`。
+
+## Retries and timeouts
+
+`KaspaPublicRestClient` retries idempotent reads when it creates its own `HttpClient`: HTTP 408, 429, 500, 502, 503, 504, network errors, and a per-attempt timeout. Defaults: 3 retries, backoff 500 ms doubling up to 10 s (with jitter), `Retry-After` honoured and capped at the same maximum, 30 s per attempt. When retries run out you get the same `KaspaRpcException` as before.
+
+- `POST /transactions` is never retried, so a submit cannot be sent twice by the client.
+- The multi-address `POST /addresses/utxos` is a read and is retried.
+- Caller cancellation is never retried.
+
+```csharp
+// Custom policy, or KaspaRetryOptions.None to turn retries off.
+using var rest = new KaspaPublicRestClient(
+    "https://api.kaspa.org",
+    httpClient: null,
+    new KaspaRetryOptions { MaxRetries = 5, MaxDelay = TimeSpan.FromSeconds(20) });
+
+// Bring your own HttpClient: wrap the handler yourself.
+var http = new HttpClient(new KaspaRetryHandler(new HttpClientHandler())) { BaseAddress = new Uri("https://api.kaspa.org/") };
+using var custom = new KaspaPublicRestClient(http);
+```
+
+Retrying does not raise the public API's rate limit; keep request volume low.
 
 ## How this complements kaswallet
 
