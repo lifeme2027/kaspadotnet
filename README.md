@@ -12,7 +12,7 @@ Fork of [svarogg/kaspadotnet](https://github.com/svarogg/kaspadotnet) by [compos
 | --- | --- |
 | `KaspaAddress` / `IKaspaAddressValidator` | Offline. Prefix `kaspa:`, `kaspatest:`, `kaspasim:`, `kaspadev:` plus bech32 charset and CashAddr checksum. |
 | `MassCalculator` / `FeeEstimator` | Offline. 交易质量（compute、transient、KIP-9 storage mass，取归一化后最大值）与手续费估算，version 0 交易，与 kaswallet 对齐。 |
-| `KaspaPublicRestClient` | Use this today. Balance, UTXOs, node info, and blockDAG from `https://api.kaspa.org`. No local node. Reads retry transient failures (see below). |
+| `KaspaPublicRestClient` | Use this today. Balance, UTXOs, node info, blockDAG, and fee estimate (`GetFeeEstimateAsync`) from `https://api.kaspa.org`. No local node. Reads retry transient failures (see below). |
 | `KaspaRetryHandler` / `KaspaRetryOptions` | Offline. `DelegatingHandler` with exponential backoff and `Retry-After` support for 429/5xx, network errors and per-attempt timeouts. |
 | `KaspaRpcClient` | Legacy / WIP. gRPC `GetBalance`, `GetUtxosByAddresses`, `GetInfo`, `GetBlockDagInfo` against the bundled protowire snapshot. Needs a kaspad gRPC port (`--utxoindex` for balance and UTXOs). |
 | `KaspadClient` / `KaspawalletdClient` | Original low-level channels. Examples for the local wallet daemon still use them. |
@@ -44,6 +44,16 @@ Console.WriteLine($"mass={estimate.Mass.FeeMass} fee={estimate.FeeSompi} sompi")
 ```
 
 测试向量来自 rusty-kaspa 的 `test_storage_mass`、`test_storage_mass_pluralities` 等单元测试（经 kaswallet 复现），另有少量 api.kaspa.org 实测值，见 `MassCalculatorTests`。
+
+## Fee estimate
+
+```csharp
+using var rest = new KaspaPublicRestClient();
+var fee = await rest.GetFeeEstimateAsync();           // GET /info/fee-estimate
+Console.WriteLine($"priority {fee.PriorityBucket.FeeRate} sompi/gram, normal {fee.NormalFeeRate}, low {fee.LowFeeRate}");
+```
+
+Pass a rate to `FeeEstimator` to turn it into a fee in sompi. The values come from the node and are estimates only.
 
 ## Retries and timeouts
 

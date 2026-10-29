@@ -18,6 +18,7 @@ namespace Kaspadotnet.Clients;
 /// <item><c>GET /addresses/{address}/utxos</c> and <c>POST /addresses/utxos</c></item>
 /// <item><c>GET /info/kaspad</c></item>
 /// <item><c>GET /info/blockdag</c></item>
+/// <item><c>GET /info/fee-estimate</c></item>
 /// <item><c>POST /transactions</c></item>
 /// </list>
 /// The public API rate-limits UTXO routes. One address per call is enough for
@@ -207,6 +208,51 @@ public sealed class KaspaPublicRestClient : IDisposable
             dto.Sink);
     }
 
+    /// <summary>
+    /// GET <c>{baseUrl}/info/fee-estimate</c>. Read-only; retried like other reads.
+    /// Throws <see cref="KaspaRpcException"/> when the priority bucket is missing or a
+    /// fee rate is negative, NaN or infinite.
+    /// </summary>
+    public async Task<KaspaFeeEstimate> GetFeeEstimateAsync(CancellationToken cancellationToken = default)
+    {
+        var dto = await ReadJsonAsync<FeeEstimateDto>("info/fee-estimate", cancellationToken).ConfigureAwait(false);
+        var priority = MapBucket(dto.PriorityBucket ?? throw new KaspaRpcException("REST fee estimate is missing priorityBucket."));
+        return new KaspaFeeEstimate(priority, MapBuckets(dto.NormalBuckets), MapBuckets(dto.LowBuckets));
+    }
+
+    private static IReadOnlyList<KaspaFeeRateBucket> MapBuckets(List<FeeBucketDto?>? rows)
+    {
+        if (rows is null || rows.Count == 0)
+        {
+            return Array.Empty<KaspaFeeRateBucket>();
+        }
+
+        var list = new List<KaspaFeeRateBucket>(rows.Count);
+        foreach (var row in rows)
+        {
+            list.Add(MapBucket(row ?? throw new KaspaRpcException("REST fee estimate contains a null bucket.")));
+        }
+
+        return list;
+    }
+
+    private static KaspaFeeRateBucket MapBucket(FeeBucketDto dto)
+    {
+        var rate = dto.Feerate ?? dto.FeeRate ?? throw new KaspaRpcException("REST fee estimate bucket is missing feerate.");
+        if (double.IsNaN(rate) || double.IsInfinity(rate) || rate < 0)
+        {
+            throw new KaspaRpcException($"REST fee estimate bucket has an invalid feerate: {rate}.");
+        }
+
+        var seconds = dto.EstimatedSeconds ?? 0;
+        if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 0)
+        {
+            throw new KaspaRpcException($"REST fee estimate bucket has invalid estimatedSeconds: {seconds}.");
+        }
+
+        return new KaspaFeeRateBucket(rate, seconds);
+    }
+
     public void Dispose()
     {
         if (_ownsClient)
@@ -392,5 +438,20 @@ public sealed class KaspaPublicRestClient : IDisposable
         public string? PruningPointHash { get; set; }
         public ulong VirtualDaaScore { get; set; }
         public string? Sink { get; set; }
+    }
+
+    private sealed class FeeEstimateDto
+    {
+        public FeeBucketDto? PriorityBucket { get; set; }
+        public List<FeeBucketDto?>? NormalBuckets { get; set; }
+        public List<FeeBucketDto?>? LowBuckets { get; set; }
+    }
+
+    private sealed class FeeBucketDto
+    {
+        public double? Feerate { get; set; }
+        [JsonPropertyName("fee_rate")]
+        public double? FeeRate { get; set; }
+        public double? EstimatedSeconds { get; set; }
     }
 }

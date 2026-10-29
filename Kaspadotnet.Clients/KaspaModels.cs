@@ -125,6 +125,25 @@ public sealed record KaspaBlockDagInfo(
     ulong VirtualDaaScore,
     string? Sink);
 
+/// <summary>One fee-rate bucket: <see cref="FeeRate"/> in sompi per gram of mass, and the node's time estimate.</summary>
+public sealed record KaspaFeeRateBucket(double FeeRate, double EstimatedSeconds);
+
+/// <summary>
+/// kaspad <c>GetFeeEstimate</c> / <c>GET /info/fee-estimate</c>. Buckets are as returned by the node
+/// (normal and low buckets ordered from higher to lower fee rate). Estimates are advisory only.
+/// </summary>
+public sealed record KaspaFeeEstimate(
+    KaspaFeeRateBucket PriorityBucket,
+    IReadOnlyList<KaspaFeeRateBucket> NormalBuckets,
+    IReadOnlyList<KaspaFeeRateBucket> LowBuckets)
+{
+    /// <summary>Fee rate of the first normal bucket, or the priority rate when the node returns none.</summary>
+    public double NormalFeeRate => NormalBuckets.Count > 0 ? NormalBuckets[0].FeeRate : PriorityBucket.FeeRate;
+
+    /// <summary>Fee rate of the first low bucket, falling back to <see cref="NormalFeeRate"/>.</summary>
+    public double LowFeeRate => LowBuckets.Count > 0 ? LowBuckets[0].FeeRate : NormalFeeRate;
+}
+
 /// <summary>kaspad gRPC or the public REST API returned an error.</summary>
 public sealed class KaspaRpcException : Exception
 {
