@@ -14,7 +14,7 @@ namespace Kaspadotnet.Clients;
 /// composehk/kaswallet's REST usage. Amounts are sompi.
 /// Endpoints used:
 /// <list type="bullet">
-/// <item><c>GET /addresses/{address}/balance</c></item>
+/// <item><c>GET /addresses/{address}/balance</c> and <c>POST /addresses/balances</c></item>
 /// <item><c>GET /addresses/{address}/utxos</c> and <c>POST /addresses/utxos</c></item>
 /// <item><c>GET /info/kaspad</c></item>
 /// <item><c>GET /info/blockdag</c></item>
@@ -103,6 +103,54 @@ public sealed class KaspaPublicRestClient : IDisposable
         var relative = "addresses/" + Uri.EscapeDataString(parsed) + "/balance";
         var dto = await ReadJsonAsync<BalanceDto>(relative, cancellationToken).ConfigureAwait(false);
         return new KaspaBalance(string.IsNullOrEmpty(dto.Address) ? parsed : dto.Address, dto.Balance);
+    }
+
+    /// <summary>
+    /// POST <c>{baseUrl}/addresses/balances</c> with <c>{"addresses":[...]}</c>.
+    /// Read-only lookup, so it is marked idempotent and retried like other reads.
+    /// Addresses are validated and canonicalised first; the result keeps request order
+    /// and has one entry per requested address (missing rows throw).
+    /// </summary>
+    public async Task<IReadOnlyList<KaspaBalance>> GetBalancesAsync(
+        IEnumerable<string> addresses,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = Normalize(addresses);
+        var payload = JsonSerializer.Serialize(new AddressListDto { Addresses = normalized }, JsonOptions);
+        using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "addresses/balances") { Content = content };
+        KaspaRetryHandler.MarkIdempotent(request);
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new KaspaRpcException($"REST {(int)response.StatusCode} for addresses/balances: {Trim(body)}");
+        }
+
+        var rows = Deserialize<List<BalanceDto?>>(body, "balances");
+        var byAddress = new Dictionary<string, ulong>(StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            if (row is null || string.IsNullOrEmpty(row.Address))
+            {
+                throw new KaspaRpcException("REST balances entry is missing address.");
+            }
+
+            byAddress[KaspaAddress.Parse(row.Address).ToString()] = row.Balance;
+        }
+
+        var result = new List<KaspaBalance>(normalized.Count);
+        foreach (var address in normalized)
+        {
+            if (!byAddress.TryGetValue(address, out var sompi))
+            {
+                throw new KaspaRpcException($"REST balances response has no entry for {address}.");
+            }
+
+            result.Add(new KaspaBalance(address, sompi));
+        }
+
+        return result;
     }
 
     public async Task<IReadOnlyList<KaspaUtxo>> GetUtxosByAddressesAsync(
